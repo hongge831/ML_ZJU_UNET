@@ -33,11 +33,11 @@ class LCDDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         im = cv2.imread(self.img_files[idx])
         im = cv2.resize(im, (0,0), fx=0.5, fy=0.5)
-        im = cv2.resize(im, (512,512))
+        im = cv2.resize(im, (16,128))
         im = np.transpose(im, (2, 0, 1)).astype(np.float32) / 255.
         mask = cv2.imread(self.msk_files[idx], cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.
         mask = cv2.resize(mask, (0,0), fx=0.5, fy=0.5)
-        mask = cv2.resize(mask, (512,512))
+        mask = cv2.resize(mask, (16,128))
         mask = np.expand_dims(mask, axis=0)
         return im, mask
 
