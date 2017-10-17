@@ -40,35 +40,36 @@ def concatenate(link, layer):
 class UNET(nn.Module):
     def __init__(self):
         super(UNET, self).__init__()
+        K = 1
         # convolution path
-        self.down1 = down_layer(in_channel=3, out_channel=16, kernel_size=3, padding=1)
+        self.down1 = down_layer(in_channel=1, out_channel=2*K, kernel_size=3, padding=1)
         self.max1 = nn.MaxPool2d(2)
-        self.down2 = down_layer(in_channel=16, out_channel=32, kernel_size=3, padding=1)
+        self.down2 = down_layer(in_channel=2*K, out_channel=4*K, kernel_size=3, padding=1)
         self.max2 = nn.MaxPool2d(2)
-        self.down3 = down_layer(in_channel=32, out_channel=64, kernel_size=3, padding=1)
+        self.down3 = down_layer(in_channel=4*K, out_channel=8*K, kernel_size=3, padding=1)
         self.max3 = nn.MaxPool2d(2)
-        self.down4 = down_layer(in_channel=64, out_channel=128, kernel_size=3, padding=1)
+        self.down4 = down_layer(in_channel=8*K, out_channel=16*K, kernel_size=3, padding=1)
 
         # deconvolution path
         #self.up3 = nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=2, stride=2)
         self.up3 = nn.Sequential(OrderedDict([
             ("upsampling", nn.UpsamplingNearest2d(scale_factor=2)),
-            ("conv", nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, padding=1))]))
-        self.up_conv3 = up_layer(in_channel=128, out_channel=64, kernel_size=3, padding=1)
+            ("conv", nn.Conv2d(in_channels=16*K, out_channels=8*K, kernel_size=3, padding=1))]))
+        self.up_conv3 = up_layer(in_channel=16*K, out_channel=8*K, kernel_size=3, padding=1)
 
         #self.up2 = nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=2, stride=2)
         self.up2 = nn.Sequential(OrderedDict([
             ("upsampling", nn.UpsamplingNearest2d(scale_factor=2)),
-            ("conv", nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, padding=1))]))
-        self.up_conv2 = up_layer(in_channel=64, out_channel=32, kernel_size=3, padding=1)
+            ("conv", nn.Conv2d(in_channels=8*K, out_channels=4*K, kernel_size=3, padding=1))]))
+        self.up_conv2 = up_layer(in_channel=8*K, out_channel=4*K, kernel_size=3, padding=1)
 
         #self.up1 = nn.ConvTranspose2d(in_channels=32, out_channels=16, kernel_size=2, stride=2)
         self.up1 = nn.Sequential(OrderedDict([
             ("upsampling", nn.UpsamplingNearest2d(scale_factor=2)),
-            ("conv", nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding=1))]))
-        self.up_conv1 = up_layer(in_channel=32, out_channel=16, kernel_size=3, padding=1)
+            ("conv", nn.Conv2d(in_channels=4*K, out_channels=2*K, kernel_size=3, padding=1))]))
+        self.up_conv1 = up_layer(in_channel=4*K, out_channel=2*K, kernel_size=3, padding=1)
 
-        self.last = nn.Conv2d(in_channels=16, out_channels=1, kernel_size=1)
+        self.last = nn.Conv2d(in_channels=2*K, out_channels=1, kernel_size=1)
 
     def forward(self, x):
         # down

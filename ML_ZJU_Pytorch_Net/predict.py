@@ -9,38 +9,59 @@ import time
 import os
 
 net = UNET()
-net.load_state_dict(torch.load('./models/seg_final.p'))
+net.load_state_dict(torch.load('./models/seg_small_final.p'))
 net.cuda()
-time1 = time.clock()
-count = 0
+data = []
+files = []
+# for f in glob.glob(sys.argv[2] + '/*.bmp'):
+#     print (f)
 file_src = os.listdir('./test_imgs')
-test_imgs = filter(lambda x: x.endswith('jpg'), file_src)
+test_imgs = filter(lambda x: x.endswith('bmp'), file_src)
 for f_test in test_imgs:
     f = './test_imgs/'+f_test
-    #print(f)
-    im = cv2.imread(f)
-    im = cv2.resize(im, (512, 512))
-    im2 = np.transpose(im, (2, 0, 1)).astype(np.float32) / 255.
+    files.append(f)
+    im = cv2.imread(f, cv2.IMREAD_GRAYSCALE)
+    im2 = im.astype(np.float32) / 255.
     im2 = np.expand_dims(im2, axis=0)
-    im2 = Variable(torch.Tensor(im2))
-    im2 = im2.cuda()
-    out = net(im2)
-    out = out.data[0].cpu().numpy() * 255
-    out = out[0, :, :].astype(np.uint8)
-    out = cv2.GaussianBlur(out, (5, 5), 1.5) > 127
-    contours = cv2.findContours(out.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    im_copy = im.copy()
-    cv2.drawContours(im, contours[1], -1, (0,0,255), 1)
-    #I dont know the second parameter in func 'drawContours',it is wait for me to figure out
-    #print(contours[1])
+    data.append(im2)
+# print 'total images:', len(data)
 
-    im = np.concatenate((im_copy, im), axis=1)
-    title = f.split('/')[-1].split('.')[0]
-    cv2.imwrite('./save_images/' + title + '.jpg', im)
-    count += 1
+# time1 = time.clock()
+Data = np.stack(data)
+num = len(data)
 
-time2 = time.clock()
-#print 'average time:', (time2-time1) / count
+Data = Variable(torch.Tensor(Data), volatile=True)
+Data = Data.cuda()
+out = net(Data)
 
+# time2 = time.clock()
+# print 'time forward:', (time2 - time1) / num
 
+Point = []
+kernel = np.array([[1,1,1],[1,0,1],[1,1,1]], dtype=np.uint8)
+for k in range(num):
+    msk = out.data[k].cpu().numpy() * 255
+    msk = msk[0, :, :].astype(np.uint8)
+    msk = cv2.GaussianBlur(msk, (3, 3), 1.)
+    peak = cv2.dilate(msk, kernel)
+    p = np.transpose(np.nonzero(msk > peak))
+    p = [a for a in p if msk[a[0], a[1]] > 100]
+    Point.append(p)
+
+# time3 = time.clock()
+# print 'time all:', (time3 - time1) / num
+
+# draw results
+for k in range(num):
+    im_save = data[k][0, :, :] * 255
+    im_save = im_save.astype(np.uint8)
+    im_save = cv2.cvtColor(im_save, cv2.COLOR_GRAY2BGR)
+    msk = out.data[k].cpu().numpy() * 255
+    msk = msk[0, :, :].astype(np.uint8)
+    msk = cv2.cvtColor(msk, cv2.COLOR_GRAY2BGR)
+    for p in Point[k]:
+        cv2.circle(im_save, (int(p[1]), int(p[0])), 8, (0, 255, 0), 1)
+    title = files[k].split('/')[-1].split('.')[0]
+    im3 = np.concatenate((im_save, msk), axis=1)
+    cv2.imwrite('save_images/' + title + '.jpg', im3)
 

@@ -9,7 +9,7 @@ import glob
 import cv2
 import os
 
-num_epochs = 30
+num_epochs = 40
 batch_size = 1
 
 torch.manual_seed(42)
@@ -21,25 +21,41 @@ class LCDDataset(torch.utils.data.Dataset):
         self.msk_files = [msk_dir + msks for msks in msks_src]
 
         imgs_src = os.listdir(img_dir)
-        imgs = filter(lambda x: x.endswith('jpg'), imgs_src)
+        imgs = filter(lambda x: x.endswith('bmp'), imgs_src)
         self.img_files = [img_dir + imgs for imgs in imgs_src]
-
         # self.msk_files = [f for f in glob.glob(msk_dir + '/*.bmp')]
-        #self.img_files = [img_dir +'/'+ f.split('/')[-1].split('.')[0]+'.jpg' for f in self.msk_files]
+        # self.img_files = [img_dir +'/'+ f.split('/')[-1].split('.')[0]+'.bmp'
+        #                   for f in self.msk_files]
 
     def __len__(self):
         return len(self.msk_files)
 
     def __getitem__(self, idx):
-        im = cv2.imread(self.img_files[idx])
-        im = cv2.resize(im, (0,0), fx=0.5, fy=0.5)
-        im = cv2.resize(im, (16,128))
-        im = np.transpose(im, (2, 0, 1)).astype(np.float32) / 255.
-        mask = cv2.imread(self.msk_files[idx], cv2.IMREAD_GRAYSCALE).astype(np.float32) / 255.
-        mask = cv2.resize(mask, (0,0), fx=0.5, fy=0.5)
-        mask = cv2.resize(mask, (16,128))
-        mask = np.expand_dims(mask, axis=0)
+        im = cv2.imread(self.img_files[idx], cv2.IMREAD_GRAYSCALE)
+        im = cv2.resize(im, (0, 0), fx=0.5, fy=0.5)
+        im = im.astype(np.float32) / 255.
+        im = np.expand_dims(im, axis=0)
+        mask = cv2.imread(self.msk_files[idx], cv2.IMREAD_GRAYSCALE)
+        p = list(np.nonzero(mask))
+        ############################################
+        p[0] = p[0] // 2
+        p[1] = p[1] // 2
+        mask = cv2.resize(mask, (0, 0), fx=0.5, fy=0.5)
+        mask[p] = 255
+        mask = np.expand_dims(mask, axis=0).astype(np.float32) / 255.
         return im, mask
+
+def euclid_distance(y_pred, y_true, size_average=True):
+    n = y_pred.size(0)
+    dif = y_true - y_pred
+    dif = torch.pow(dif, 2)
+    alpha = y_true * 0.95
+    beta = (1 - y_true) * 0.05
+    weight = alpha + beta
+    dif = torch.sqrt(torch.sum(weight * dif))
+    if size_average:
+        dif = dif / n
+    return dif
 
 
 def hellinger_distance(y_pred, y_true, size_average=True):
@@ -72,11 +88,12 @@ def train():
     net = UNET()
     if cuda:
         net = net.cuda()
-    criterion = hellinger_distance
-    optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
+    #criterion = hellinger_distance
+    criterion = euclid_distance
+    optimizer = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=0.01)
 
     print("preparing training data ...")
-    train_set = LCDDataset("./imgs/", "./masks/")
+    train_set = LCDDataset("./train_imgs/", "./train_masks/")
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4)
     print("done ...")
 
@@ -111,33 +128,31 @@ def train():
             outputs = net(images)
 
             # save to file
-            im = images.data[0].cpu().numpy()
-            im = np.transpose(im, (1, 2, 0)) * 255
-            im = im.astype(np.uint8)
-            mask = outputs.data[0].cpu().numpy()[0, :, :] * 255
-            mask = mask.astype(np.uint8)
-            mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            save_im = np.concatenate((im, mask), axis=1)
-            cv2.imwrite('./save_images/'+str(k)+'.jpg', save_im)
+            for j in range(batch_size):
+                im = images.data[j].cpu().numpy() * 255
+                im = im[0,:,:].astype(np.uint8)
+                msk = masks.data[j].cpu().numpy() * 255
+                msk = msk[0,:,:].astype(np.uint8)
+                mask = outputs.data[j].cpu().numpy()[0, :, :] * 255
+                mask = mask.astype(np.uint8)
+                save_im = np.concatenate((im, mask, msk), axis=1)
+                cv2.imwrite('./save_images/'+str(k*batch_size + j)+'.jpg', save_im)
                 
             vloss = criterion(outputs, masks, size_average=False)
             val_loss.update(vloss.data[0], images.size(0))
 
         print("Epoch {}, Loss: {}, Validation Loss: {}".format(epoch+1, train_loss.avg, val_loss.avg))
 
-    if (epoch + 1) % 10 == 0:
-        torch.save(net.state_dict(), './models/seg_{0}.p'.format(epoch+1))
+        if (epoch + 1) % 10 == 0:
+            torch.save(net.state_dict(), 'models/seg_small_{0}.p'.format(epoch+1))
     return net
-'''
+
 def test(model):
     model.eval()
-'''
-
 
 
 
 if __name__ == "__main__":
-    print("begin tarin")
     net = train()
-    torch.save(net.state_dict(), './models/seg_final.p')
+    torch.save(net.state_dict(), 'models/seg_small_final.p')
     
