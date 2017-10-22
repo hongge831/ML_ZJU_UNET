@@ -9,7 +9,7 @@ import time
 import os
 
 net = UNET()
-net.load_state_dict(torch.load('./models/seg_small_final.p'))
+net.load_state_dict(torch.load('./80step_model/seg_small_final.p'))
 net.cuda()
 data = []
 files = []
@@ -21,6 +21,7 @@ for f_test in test_imgs:
     f = './test_imgs/'+f_test
     files.append(f)
     im = cv2.imread(f, cv2.IMREAD_GRAYSCALE)
+    im = cv2.resize(im, (128, 1024))
     im2 = im.astype(np.float32) / 255.
     im2 = np.expand_dims(im2, axis=0)
     data.append(im2)

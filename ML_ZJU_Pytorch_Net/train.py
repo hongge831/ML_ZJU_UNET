@@ -9,7 +9,7 @@ import glob
 import cv2
 import os
 
-num_epochs = 40
+num_epochs = 30
 batch_size = 1
 
 torch.manual_seed(42)
@@ -32,6 +32,10 @@ class LCDDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         im = cv2.imread(self.img_files[idx], cv2.IMREAD_GRAYSCALE)
+        height = im.shape[0]
+        width = im.shape[1]
+        im = cv2.copyMakeBorder(im,0,1024-height,0,128-width,cv2.BORDER_CONSTANT,value=0)
+        # im = cv2.resize(im, (128, 1024))
         im = cv2.resize(im, (0, 0), fx=0.5, fy=0.5)
         im = im.astype(np.float32) / 255.
         im = np.expand_dims(im, axis=0)
@@ -40,7 +44,12 @@ class LCDDataset(torch.utils.data.Dataset):
         ############################################
         p[0] = p[0] // 2
         p[1] = p[1] // 2
+        heightM = mask.shape[0]
+        widthM = mask.shape[1]
+        mask = cv2.copyMakeBorder(mask, 0, 1024 - heightM, 0, 128 - widthM, cv2.BORDER_CONSTANT, value=0)
         mask = cv2.resize(mask, (0, 0), fx=0.5, fy=0.5)
+        # print(mask.shape)
+        # mask = cv2.resize(mask, (128, 1024))
         mask[p] = 255
         mask = np.expand_dims(mask, axis=0).astype(np.float32) / 255.
         return im, mask
@@ -90,7 +99,7 @@ def train():
         net = net.cuda()
     #criterion = hellinger_distance
     criterion = euclid_distance
-    optimizer = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=0.01)
+    optimizer = torch.optim.Adam(net.parameters(), lr=2e-3, weight_decay=0.01)
 
     print("preparing training data ...")
     train_set = LCDDataset("./train_imgs/", "./train_masks/")
@@ -143,7 +152,7 @@ def train():
 
         print("Epoch {}, Loss: {}, Validation Loss: {}".format(epoch+1, train_loss.avg, val_loss.avg))
 
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 5 == 0:
             torch.save(net.state_dict(), 'models/seg_small_{0}.p'.format(epoch+1))
     return net
 
