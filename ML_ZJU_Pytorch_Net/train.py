@@ -36,6 +36,7 @@ class LCDDataset(torch.utils.data.Dataset):
         width = im.shape[1]
         im = cv2.copyMakeBorder(im,0,1024-height,0,128-width,cv2.BORDER_CONSTANT,value=0)
         # im = cv2.resize(im, (128, 1024))
+		#when the image's size lager than 128,then make it to 128
         im = cv2.resize(im, (0, 0), fx=0.5, fy=0.5)
         im = im.astype(np.float32) / 255.
         im = np.expand_dims(im, axis=0)
